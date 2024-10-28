@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import scipy.signal
+import csv
 
 def TakeFlatParamsFrom(model):
     params = [torch.ravel(param.detach()) for param in model.parameters()]
@@ -26,7 +27,19 @@ def GetCumulativeReturns(r, gamma=1):
     #assert r.ndim >= 1
     return scipy.signal.lfilter([1], [1, -gamma], r[::-1], axis=0)[::-1]
 
-def rollout(env, agent, max_pathlength=2500, n_timesteps=50000):
+def normaliziing(dict, key):
+        if not key in dict:
+            dict[key] = 0
+            return True
+        n1 = dict[key]
+        for key_, value_ in dict.items():
+            if key_ != key:
+                if abs(value_ - n1) > 10:
+                    return False
+        return True
+
+
+def rollout(env, agent, max_pathlength=2500, n_timesteps=50000, file = "", sample=True):
     """
     Generate rollouts.
     :param: env - environment in which we will make actions to generate rollouts.
@@ -36,13 +49,17 @@ def rollout(env, agent, max_pathlength=2500, n_timesteps=50000):
     """
     paths = []
     n_actions = env.action_space.n
+    if file != "":
+        stream = open(file, 'a+', newline='')
+        spamwriter = csv.writer(stream, delimiter=' ',
+                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
     total_timesteps = 0
     while total_timesteps < n_timesteps:
         obervations, actions, rewards, action_probs = [], [], [], []
         obervation, _ = env.reset()
         for _ in range(max_pathlength):
-            action, policy = agent.act(n_actions,obervation)
+            action, policy = agent.act(n_actions,obervation,sample)
             obervations.append(obervation)
             actions.append(action)
             action_probs.append(policy)
@@ -58,6 +75,9 @@ def rollout(env, agent, max_pathlength=2500, n_timesteps=50000):
                     "cumulative_returns": GetCumulativeReturns(rewards),
                 }
                 paths.append(path)
+                if terminated and file != "":
+                    for obs, act in zip(np.array(obervations), np.array(actions)):
+                        spamwriter.writerow(torch.cat((torch.Tensor(obs), torch.Tensor([act]))).numpy())
                 break
     return paths
 

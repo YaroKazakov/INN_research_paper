@@ -1,6 +1,14 @@
 torch
 numpy
 matplotlib
-gymnasium
 scipy
-gymnasium[classic-control]
+torchvision
+pytorchcv
+catalyst
+torchsummary
+scipy
+Cython
+catalyst
+gymnasium
+pandas
+swig
