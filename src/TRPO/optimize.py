@@ -7,52 +7,42 @@ from src.TRPO.rollout import rollout, update_step, get_entropy
 from src.TRPO.agent import TinyModel
 from pprint import pprint
 import os
+from torchvision.transforms import v2, InterpolationMode
+import matplotlib.pyplot as plt
 
-#env = gym.make("Acrobot-v1", render_mode="rgb_array")
-#env = gym.make('FrozenLake-v1', desc=None, map_name="4x4", is_slippery=True)
-Env_name = 'LunarLander-v3'
 #Env_name = "Acrobot-v1"
+Env_name = 'LunarLander-v2'
+#Env_name = "HalfCheetah-v4"
+#Env_name = "Ant-v4"
+
 env = gym.make(Env_name, render_mode="rgb_array")
-env.reset()
 observation_shape = env.observation_space.shape
-n_actions = env.action_space.n
 print("Observation Space", env.observation_space)
 print("Action Space", env.action_space)
-agent_ = AgentTRPO(env.observation_space, n_actions)
-
-def sometests():
-    # Check if log-probabilities satisfies all the requirements
-    log_probs = agent.get_log_probs(torch.tensor(env.reset()[0][np.newaxis], dtype=torch.float32))
-    assert (
-        isinstance(log_probs, torch.Tensor) and
-        log_probs.requires_grad
-    ), "log_probs must be a torch.Tensor with grad"
-    assert log_probs.shape == (1, n_actions)
-    sums = torch.exp(log_probs).sum(dim=1)
-    assert torch.allclose(sums, torch.ones_like(sums))
-    # Demo use
-    print("sampled:", [agent.act(n_actions,env.reset()[0]) for _ in range(5)])
-    print("greedy:", [agent.act(n_actions,env.reset()[0], sample=False) for _ in range(5)])
-
-    paths = rollout(env, agent, max_pathlength=5, n_timesteps=100)
-    pprint(paths[-1])
-
-    assert (paths[0]['policy'].shape == (5, n_actions))
-    assert (paths[0]['cumulative_returns'].shape == (5,))
-    assert (paths[0]['rewards'].shape == (5,))
-    assert (paths[0]['observations'].shape == (5,) + observation_shape)
-    assert (paths[0]['actions'].shape == (5,))
 
 
+def make_agent(n_neurons = 100):
+    n_actions = 0
+    isactiondiscrete = False
+    try:
+        n_actions = env.action_space.n
+        isactiondiscrete = True
+    except:
+        n_actions = env.action_space.shape[0]
+    assert n_actions != 0
+    agent = AgentTRPO(env.observation_space, n_actions,
+                      n_neurons=n_neurons, isactiondiscrete = isactiondiscrete)
+    return agent
 
-def train(epochs = 30, model_name = "acrobat.pth", metrics = "metrics.dat", agent = agent_):
+
+def train(epochs = 30, model_name = "acrobat.pth", metrics = "metrics.dat", agent = None):
     #The max_kl hyperparameter determines how large the KL discrepancy between the old and new policies can be at each stage.
     max_kl = 0.01
     numeptotal = 0  # Number of episodes we have completed so far.
     start_time = time.time()
     os.makedirs(os.path.dirname(metrics), exist_ok=True)
     out_stream = open(metrics,"w")
-    maxreward = -1000;
+    maxreward = -1000
     for i in range(epochs):
         print(f"\n********** Iteration %{i} ************")
         print("Rollout")
@@ -69,6 +59,8 @@ def train(epochs = 30, model_name = "acrobat.pth", metrics = "metrics.dat", agen
         episode_rewards = np.array([path["rewards"].sum() for path in paths])
         stats = {}
         numeptotal += len(episode_rewards)
+        #stats["returns"] = returns
+        #stats["old_probs"] = old_probs
         stats["Total number of episodes"] = numeptotal
         stats["Average sum of rewards per episode"] = episode_rewards.mean()
         stats["Std of rewards per episode"] = episode_rewards.std()
@@ -86,25 +78,53 @@ def train(epochs = 30, model_name = "acrobat.pth", metrics = "metrics.dat", agen
             maxreward = episode_rewards.mean()
 
 
+def resizeNN(modelH, models):
+    '''
+    :param modelH: Large model
+    :param models: Small model that is modified here
+    '''
+    sdH = modelH.state_dict()
+    sds = models.state_dict()
+    print("Start NN resize")
+    # BICUBIC
+    sds['linear1.weight'] = v2.Resize(size=sds['linear1.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear1.weight'].unsqueeze(0))[0]
+    new_shape = (1,sds['linear1.bias'].shape[0])
+    sds['linear1.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear1.bias'].unsqueeze(0).unsqueeze(0))[0][0]
 
-def test(model_name = "acrobat.pth", nrollout = 4, file_ = "data_training.csv", sample_=False, agent = agent_):
+    sds['linear2.weight'] = v2.Resize(size=sds['linear2.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear2.weight'].unsqueeze(0))[0]
+    new_shape = (1,sds['linear2.bias'].shape[0])
+    sds['linear2.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear2.bias'].unsqueeze(0).unsqueeze(0))[0][0]
+    
+    sds['linear4.weight'] = v2.Resize(size=sds['linear4.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear4.weight'].unsqueeze(0))[0]
+    new_shape = (1,sds['linear4.bias'].shape[0])
+    sds['linear4.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear4.bias'].unsqueeze(0).unsqueeze(0))[0][0]
+    
+    models.load_state_dict(sds)
+
+
+def test(model_name = "acrobat.pth", nrollout = 4, file_ = "data_training.csv",
+         sample_=False, render = False, ModelH = None, agent = None):
     """
     Test model from the path: model_name
     """
-    agent.model = TinyModel(observation_shape[0],n_actions)
+    #agent.model = TinyModel(observation_shape[0],n_actions)
     #agent.model.load_state_dict(torch.load("acrobat.pth", weights_only=False))
     agent.model =torch.load(model_name, weights_only=False).cpu()
+    agent.model.eval()
+    
+    if ModelH != None:
+        modelH = torch.load(ModelH, weights_only=False).cpu()
+        resizeNN(modelH, agent.model)
+        agent.model.eval()
 
-    scores = []
-    env = gym.make(Env_name, render_mode="human")
-    #env.reset()
-    print(f"Start testing the model over epochs...")
-
+    render_mode = "rgb_array"
+    if render: render_mode = "human"
+    env = gym.make(Env_name, render_mode=render_mode)
     env.reset()
+    print(f"Start testing the model over epochs...")
     stats = {}
     episode_rewards = np.array([])
     for _ in range(nrollout):
-        #print(env.step(2))
         paths = rollout(env, agent, max_pathlength=2500, n_timesteps=500, file = file_, sample=sample_)
         episode_rewards = np.append(episode_rewards, np.array([path["rewards"].sum() for path in paths]))
     stats["Average sum of rewards per episode"] = episode_rewards.mean()
@@ -112,11 +132,3 @@ def test(model_name = "acrobat.pth", nrollout = 4, file_ = "data_training.csv", 
 
     return stats
 
-if __name__ == "__main__":
-    #train(epochs=50, model_name = Env_name + ".pth")
-    #test(model_name = "/media/eakozyrev/diskD/RL/INN_RL/data/" + Env_name + ".pth")
-    #test(model_name="/media/eakozyrev/diskD/RL/INN_RL/src/INN/test_mode1.pth")
-    #test(model_name="/media/eakozyrev/diskD/RL/INN_RL/src/INN/test_mode2.pth")
-    #test(model_name="/media/eakozyrev/diskD/RL/INN_RL/src/INN/test_mode3.pth")
-    #test(model_name="/media/eakozyrev/diskD/RL/INN_RL/src/INN/test_mode4.pth")
-    pass

@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import scipy.signal
 import csv
+#torch.manual_seed(0)
+#torch.use_deterministic_algorithms(True, warn_only=True)
 
 def TakeFlatParamsFrom(model):
     params = [torch.ravel(param.detach()) for param in model.parameters()]
@@ -23,7 +25,7 @@ def GetCumulativeReturns(r, gamma=1):
     G_i = r_i + gamma*r_{i+1} + gamma^2*r_{i+2} + ...
     Also known as R(s,a).
     """
-    r = np.array(r)
+    r = np.array(r, dtype=np.float32)
     #assert r.ndim >= 1
     return scipy.signal.lfilter([1], [1, -gamma], r[::-1], axis=0)[::-1]
 
@@ -48,7 +50,11 @@ def rollout(env, agent, max_pathlength=2500, n_timesteps=50000, file = "", sampl
     :param: n_timesteps - total sum of sizes of all pathes we generate.
     """
     paths = []
-    n_actions = env.action_space.n
+    n_actions = 0
+    try:
+        n_actions = env.action_space.n
+    except:
+        pass
     if file != "":
         stream = open(file, 'a+', newline='')
         spamwriter = csv.writer(stream, delimiter=' ',
@@ -67,16 +73,22 @@ def rollout(env, agent, max_pathlength=2500, n_timesteps=50000, file = "", sampl
             rewards.append(reward)
             total_timesteps += 1
             if terminated or truncated or total_timesteps >= n_timesteps:
+                obs = np.array(obervations)
+                if len(obs.shape) == 1:
+                    obs = np.array(obervations)
+                    obs = obs[:, np.newaxis]
                 path = {
-                    "observations": np.array(obervations),
+                    "observations": obs,
                     "policy": np.array(action_probs),
                     "actions": np.array(actions),
                     "rewards": np.array(rewards),
                     "cumulative_returns": GetCumulativeReturns(rewards),
                 }
                 paths.append(path)
-                if terminated and file != "":
+                if file != "":
                     for obs, act in zip(np.array(obervations), np.array(actions)):
+                        if isinstance(obs, np.int64):
+                            obs = [obs]
                         spamwriter.writerow(torch.cat((torch.Tensor(obs), torch.Tensor([act]))).numpy())
                 break
     return paths
@@ -156,6 +168,7 @@ def linesearch(f, x: torch.Tensor, fullstep: torch.Tensor, max_kl: float, max_ba
         new_loss, kl = f(xnew)
         if kl <= max_kl and new_loss < loss:
             x = xnew
+            print(f"Found new params with kl <= max_kl and new_loss < loss in {stepfrac = }")
             loss = new_loss
     return x
 
@@ -213,7 +226,6 @@ def update_step(agent, observations, actions, cumulative_returns, old_probs, max
 
     def Fvp(v):
         # Here we calculate Fx to solve Fx = g using conjugate gradients
-        # In fact, we use several techniques to efficiently calculate
 
         kl = get_kl(agent, observations, actions, cumulative_returns, old_probs)
 
