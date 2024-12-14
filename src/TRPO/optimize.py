@@ -7,13 +7,18 @@ from src.TRPO.rollout import rollout, update_step, get_entropy
 from src.TRPO.agent import TinyModel
 from pprint import pprint
 import os
+import cv2
 from torchvision.transforms import v2, InterpolationMode
 import matplotlib.pyplot as plt
 
+
 #Env_name = "Acrobot-v1"
-Env_name = 'LunarLander-v2'
+Env_name = 'LunarLander-v3'
+#Env_name = "Swimmer-v4"
+#Env_name = "Walker2d-v4"
 #Env_name = "HalfCheetah-v4"
 #Env_name = "Ant-v4"
+
 
 env = gym.make(Env_name, render_mode="rgb_array")
 observation_shape = env.observation_space.shape
@@ -21,7 +26,7 @@ print("Observation Space", env.observation_space)
 print("Action Space", env.action_space)
 
 
-def make_agent(n_neurons = 100):
+def make_agent(n_neurons = [100,100], isKAN=False):
     n_actions = 0
     isactiondiscrete = False
     try:
@@ -31,7 +36,9 @@ def make_agent(n_neurons = 100):
         n_actions = env.action_space.shape[0]
     assert n_actions != 0
     agent = AgentTRPO(env.observation_space, n_actions,
-                      n_neurons=n_neurons, isactiondiscrete = isactiondiscrete)
+                      n_neurons=n_neurons,
+                      isactiondiscrete = isactiondiscrete,
+                      iskan=isKAN)
     return agent
 
 
@@ -78,26 +85,29 @@ def train(epochs = 30, model_name = "acrobat.pth", metrics = "metrics.dat", agen
             maxreward = episode_rewards.mean()
 
 
-def resizeNN(modelH, models):
+def resizeNN(modelH, models, interpolation = InterpolationMode.BICUBIC, sizes = (100,100)):
     '''
     :param modelH: Large model
     :param models: Small model that is modified here
     '''
     sdH = modelH.state_dict()
+    print(f"{sdH.keys()=}")
     sds = models.state_dict()
     print("Start NN resize")
     # BICUBIC
-    sds['linear1.weight'] = v2.Resize(size=sds['linear1.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear1.weight'].unsqueeze(0))[0]
+    #sds['linear1.weight'] = cv2.Resize(sdH['linear1.weight'].unsqueeze(0), sds['linear1.weight'].shape, interpolation=cv2.INTER_LINEAR)[0]
+    print(f"{sds['linear1.weight'].shape = }")
+    sds['linear1.weight'] = v2.Resize(size=sds['linear1.weight'].shape, interpolation = interpolation)(sdH['linear1.weight'].unsqueeze(0))[0]
     new_shape = (1,sds['linear1.bias'].shape[0])
-    sds['linear1.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear1.bias'].unsqueeze(0).unsqueeze(0))[0][0]
+    sds['linear1.bias'] = v2.Resize(size=new_shape, interpolation = interpolation)(sdH['linear1.bias'].unsqueeze(0).unsqueeze(0))[0][0]
 
-    sds['linear2.weight'] = v2.Resize(size=sds['linear2.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear2.weight'].unsqueeze(0))[0]
+    sds['linear2.weight'] = v2.Resize(size=sds['linear2.weight'].shape, interpolation = interpolation)(sdH['linear2.weight'].unsqueeze(0))[0]
     new_shape = (1,sds['linear2.bias'].shape[0])
-    sds['linear2.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear2.bias'].unsqueeze(0).unsqueeze(0))[0][0]
+    sds['linear2.bias'] = v2.Resize(size=new_shape, interpolation = interpolation)(sdH['linear2.bias'].unsqueeze(0).unsqueeze(0))[0][0]
     
-    sds['linear4.weight'] = v2.Resize(size=sds['linear4.weight'].shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear4.weight'].unsqueeze(0))[0]
+    sds['linear4.weight'] = v2.Resize(size=sds['linear4.weight'].shape, interpolation = interpolation)(sdH['linear4.weight'].unsqueeze(0))[0]
     new_shape = (1,sds['linear4.bias'].shape[0])
-    sds['linear4.bias'] = v2.Resize(size=new_shape, interpolation = InterpolationMode.BICUBIC)(sdH['linear4.bias'].unsqueeze(0).unsqueeze(0))[0][0]
+    sds['linear4.bias'] = v2.Resize(size=new_shape, interpolation = interpolation)(sdH['linear4.bias'].unsqueeze(0).unsqueeze(0))[0][0]
     
     models.load_state_dict(sds)
 
@@ -109,11 +119,12 @@ def test(model_name = "acrobat.pth", nrollout = 4, file_ = "data_training.csv",
     """
     #agent.model = TinyModel(observation_shape[0],n_actions)
     #agent.model.load_state_dict(torch.load("acrobat.pth", weights_only=False))
+    print(f"load model from {model_name}")
     agent.model =torch.load(model_name, weights_only=False).cpu()
     agent.model.eval()
     
     if ModelH != None:
-        modelH = torch.load(ModelH, weights_only=False).cpu()
+        modelH = torch.load(ModelH, weights_only=False)
         resizeNN(modelH, agent.model)
         agent.model.eval()
 
@@ -129,6 +140,6 @@ def test(model_name = "acrobat.pth", nrollout = 4, file_ = "data_training.csv",
         episode_rewards = np.append(episode_rewards, np.array([path["rewards"].sum() for path in paths]))
     stats["Average sum of rewards per episode"] = episode_rewards.mean()
     print(stats)
-
+    env.close()
     return stats
 

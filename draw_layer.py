@@ -19,7 +19,7 @@ from torch_integral import IntegralWrapper
 from torch_integral import standard_continuous_dims
 
 def main():
-    model_path = f"data/{Env_name}/{Env_name}_INN_100.pth"
+    model_path = f"data/{Env_name}/{Env_name}_INN_100.pth100_0_0"
     model = torch.load(model_path, weights_only=False)
     print(f"{model.state_dict()=}")
     #model = MnistNet()
@@ -39,7 +39,7 @@ def main():
     plt.ylabel("FFT magnitude", fontsize=12)
     plt.xlabel("frequency", fontsize=12)
 
-    model_path = f"data/{Env_name}/{Env_name}_NN_100.pth"
+    model_path = f"data/{Env_name}/{Env_name}_NN_100.pth100_0_0"
     model = torch.load(model_path, weights_only=False)
     model.eval()
     W = model.state_dict()[dense_layer_name].cpu().detach().numpy()

@@ -17,3 +17,7 @@ pip install -r requirements.txt
 pip install git+https://github.com/TheStageAI/TorchIntegral.git
 
 pip install "gymnasium[box2d]"
+
+git clone https://github.com/AntonioTepsich/Convolutional-KANs.git
+
+pip install "gymnasium[mujoco]"
