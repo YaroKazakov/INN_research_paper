@@ -1,4 +1,4 @@
-# INN_RL
+# Kolmogorov–Arnold and Integral Neural Networks in the context of Imitation Learning: robustness to network resizing and catastrophic interference
 
 The project allows to represent an agent’s policy models as INN and KAN. By utilizing open
 RL benchmarks (Acrobot, Lunar Lander and on continuous control tasks Swimmer, Walker2D, Half Cheetah and Ant), we have demonstrated that INN representation provides flexible control over the degree of network
