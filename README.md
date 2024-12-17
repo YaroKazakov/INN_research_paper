@@ -1,11 +1,6 @@
 # Kolmogorov–Arnold and Integral Neural Networks in the context of Imitation Learning: robustness to network resizing and catastrophic interference
 
-The project allows to represent an agent’s policy models as INN and KAN. By utilizing open
-RL benchmarks (Acrobot, Lunar Lander and on continuous control tasks Swimmer, Walker2D, Half Cheetah and Ant), we have demonstrated that INN representation provides flexible control over the degree of network
-discretization without necessitating retraining across a broad
-spectrum of model compression levels. This allows users to
-directly tailor the balance between network size and accuracy. On the orher hand we showed that KAN representation of the agent policy allows the agent to delay the onset of
-catastrophic forgetting to a later stage.
+This is the repo for our paper that examines the issue of catastrophic forgetting and online resizing in the context of imitation learning.
 
 # Building
 ```. setup.sh```
