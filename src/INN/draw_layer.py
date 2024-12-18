@@ -40,7 +40,7 @@ class MnistNet(nn.Module):
 
         return x
 
-model_path = "/home/eakozyrev/diskD/RL/INN_RL/data/LunarLander-v3.pth" #src/INN/test_mode0.pth"  #data/LunarLander-v3.pth" #src/INN/test_mode0.pth"  # Replace with your model file path
+model_path = "/home/YaroKazakov/INN_research_paper/data/LunarLander-v3.pth" #src/INN/test_mode0.pth"  #data/LunarLander-v3.pth" #src/INN/test_mode0.pth"  # Replace with your model file path
 model = torch.load(model_path, weights_only=False)
 #model = MnistNet()
 #model.load_state_dict(torch.load(model_path, weights_only=False))
